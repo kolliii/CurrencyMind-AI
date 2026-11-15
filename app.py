@@ -258,7 +258,7 @@ try:
         "Выбранная модель",
         result["selected"]
     )
-st.write(
+    st.write(
     f"Помилка обраної моделі (MAE): "
     f"{result['selected_mae']:.6f}"
 )
@@ -279,6 +279,10 @@ else:
         "Обрана ML-модель показала меншу "
         "помилку, ніж Baseline на перевірочних даних."
     )
+
+    st.write(
+    
+    
     st.subheader("История курса")
 
     fig = go.Figure()

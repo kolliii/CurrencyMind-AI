@@ -103,7 +103,7 @@ def create_features(df):
     data["target"] = data["rate"].shift(-1)
 
     return data.dropna(subset=FEATURES + ["target"])
-    
+
 
 
 FEATURES = [

@@ -77,30 +77,33 @@ def get_currency_data(code):
     return df
 
 
-def create_features(df):
+
+def build_feature_rows(df):
     data = df.copy()
 
-    # Предыдущие значения курса
     for lag in [1, 2, 3, 5, 10]:
         data[f"lag_{lag}"] = data["rate"].shift(lag)
 
-    # Изменения курса
     data["change_1"] = data["rate"].pct_change(1)
     data["change_5"] = data["rate"].pct_change(5)
 
-    # Скользящие средние
     data["mean_5"] = data["rate"].rolling(5).mean()
     data["mean_10"] = data["rate"].rolling(10).mean()
 
-    # Волатильность
     data["volatility_5"] = (
         data["change_1"].rolling(5).std()
     )
 
-    # Следующее опубликованное значение курса
+    return data
+
+
+def create_features(df):
+    data = build_feature_rows(df)
+
     data["target"] = data["rate"].shift(-1)
 
-    return data.dropna()
+    return data.dropna(subset=FEATURES + ["target"])
+    
 
 
 FEATURES = [

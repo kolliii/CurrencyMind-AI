@@ -261,13 +261,13 @@ try:
     st.write(
     f"Помилка обраної моделі (MAE): "
     f"{result['selected_mae']:.6f}"
-)
+    )
 
-st.write(
+    st.write(
     f"Помилка Baseline (MAE): "
     f"{result['baseline_mae']:.6f}"
-)
-
+    )
+  
 if result["baseline_better"]:
     st.warning(
         "Проста модель Baseline показала "

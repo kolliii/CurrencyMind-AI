@@ -1,0 +1,1 @@
+# CurrencyMind-AI

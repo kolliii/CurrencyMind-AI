@@ -35,8 +35,8 @@ def get_currency_data(code):
     end = date.today().strftime("%Y%m%d")
 
     url = (
-        "https://bank.gov.ua/NBU_Exchange/"
-        "exchange_site"
+    "https://bank.gov.ua/NBU_Exchange/"
+    "exchange_site"
     )
 
     params = {
@@ -241,6 +241,7 @@ try:
     change = forecast - last_rate
     percent = change / last_rate * 100
 
+    # Основные показатели
     c1, c2, c3 = st.columns(3)
 
     c1.metric(
@@ -258,32 +259,92 @@ try:
         "Выбранная модель",
         result["selected"]
     )
+
+    # Проверка качества моделей
+    st.subheader("Качество моделей")
+
     st.write(
-    f"Помилка обраної моделі (MAE): "
-    f"{result['selected_mae']:.6f}"
+        f"MAE выбранной модели: "
+        f"{result['selected_mae']:.6f}"
     )
 
     st.write(
-    f"Помилка Baseline (MAE): "
-    f"{result['baseline_mae']:.6f}"
-    )
-  
-if result["baseline_better"]:
-    st.warning(
-        "Проста модель Baseline показала "
-        "кращу точність на перевірочних даних. "
-        "Прогноз ML-моделі потрібно трактувати обережно."
-    )
-else:
-    st.success(
-        "Обрана ML-модель показала меншу "
-        "помилку, ніж Baseline на перевірочних даних."
+        f"MAE Baseline: "
+        f"{result['baseline_mae']:.6f}"
     )
 
-    st.write(
-    
-    
+    if result["baseline_better"]:
+        st.warning(
+            "Baseline показал меньшую ошибку. "
+            "Результат ML-модели следует трактовать осторожно."
+        )
+    else:
+        st.success(
+            "ML-модель показала меньшую ошибку, "
+            "чем Baseline на проверочных данных."
+        )
+
+    # График курса
     st.subheader("История курса")
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=df.index,
+        y=df["rate"],
+        mode="lines",
+        name="Исторический курс"
+    ))
+
+    fig.update_layout(
+        xaxis_title="Дата",
+        yaxis_title="UAH",
+        template="plotly_dark"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # Сравнение моделей
+    st.subheader("Сравнение моделей")
+
+    comparison = [{
+        "Модель": "Baseline",
+        "MAE": result["baseline_mae"]
+    }]
+
+    for name, item in result["results"].items():
+        comparison.append({
+            "Модель": name,
+            "MAE": item["mae"]
+        })
+
+    st.dataframe(
+        pd.DataFrame(comparison),
+        use_container_width=True
+    )
+
+    st.info(
+        "Прогноз относится к следующему опубликованному "
+        "значению официального курса. "
+        "Это экспериментальная оценка, а не гарантия."
+    )
+
+except Exception as error:
+    st.error(
+        f"Не удалось выполнить анализ: {error}"
+    )
+
+st.divider()
+
+st.caption(
+    "Источник валютных данных: Национальный банк Украины. "
+    "Проект предназначен для обучения и исследования."
+    )
+
+
 
     fig = go.Figure()
 
@@ -339,28 +400,4 @@ st.caption(
   )
 
 
-def build_feature_rows(df):
-    data = df.copy()
 
-    for lag in [1, 2, 3, 5, 10]:
-        data[f"lag_{lag}"] = data["rate"].shift(lag)
-
-    data["change_1"] = data["rate"].pct_change(1)
-    data["change_5"] = data["rate"].pct_change(5)
-
-    data["mean_5"] = data["rate"].rolling(5).mean()
-    data["mean_10"] = data["rate"].rolling(10).mean()
-
-    data["volatility_5"] = (
-        data["change_1"].rolling(5).std()
-    )
-
-    return data
-
-
-def create_features(df):
-    data = build_feature_rows(df)
-    data["target"] = data["rate"].shift(-1)
-
-    return data.dropna(subset=FEATURES + ["target"])
-  

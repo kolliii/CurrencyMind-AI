@@ -121,6 +121,7 @@ FEATURES = [
 ]
 
 
+
 def analyze_currency(df):
     data = create_features(df)
 
@@ -132,9 +133,7 @@ def analyze_currency(df):
     X = data[FEATURES]
     y = data["target"]
 
-    # Хронологическое разделение:
-    # старые данные — обучение,
-    # более новые — проверка.
+    # Разделение данных по времени
     split = int(len(data) * 0.8)
 
     X_train = X.iloc[:split]
@@ -149,9 +148,9 @@ def analyze_currency(df):
             Ridge(alpha=1.0)
         ),
         "Random Forest": RandomForestRegressor(
-            n_estimators=200,
-            max_depth=6,
-            min_samples_leaf=3,
+            n_estimators=300,
+            max_depth=8,
+            min_samples_leaf=2,
             random_state=42
         )
     }
@@ -160,6 +159,7 @@ def analyze_currency(df):
 
     for name, model in models.items():
         model.fit(X_train, y_train)
+
         predictions = model.predict(X_test)
 
         error = mean_absolute_error(
@@ -172,8 +172,7 @@ def analyze_currency(df):
             "mae": error
         }
 
-    # Проверка простого прогноза:
-    # следующее значение = текущее значение.
+    # Контрольная модель
     baseline = X_test["rate"].values
 
     baseline_error = mean_absolute_error(
@@ -181,49 +180,45 @@ def analyze_currency(df):
         baseline
     )
 
-    # Выбираем лучшую модель только среди
-    # моделей с меньшей ошибкой, чем baseline.
-    candidates = {
-        name: result
-        for name, result in results.items()
-        if result["mae"] < baseline_error
-    }
-
-    if candidates:
-        best_name = min(
-            candidates,
-            key=lambda name: candidates[name]["mae"]
-        )
-        best_model = candidates[best_name]["model"]
-        selected_name = best_name
-    else:
-        best_model = None
-        selected_name = "Baseline"
-
-    # Для прогноза используем последнюю
-    # доступную строку признаков.
-    latest_features = (
-    build_feature_rows(df)
-    .dropna(subset=FEATURES)[FEATURES]
-    .iloc[[-1]]
+    # Выбираем лучшую ML-модель
+    best_name = min(
+        results,
+        key=lambda name: results[name]["mae"]
     )
 
-    if best_model is not None:
-        forecast = float(
-            best_model.predict(latest_features)[0]
-        )
-    else:
-        forecast = float(df["rate"].iloc[-1])
+    best_model = results[best_name]["model"]
+
+    # Переобучаем её на всей истории
+    best_model.fit(X, y)
+
+    # Последние доступные признаки
+    latest_features = (
+        build_feature_rows(df)
+        .dropna(subset=FEATURES)[FEATURES]
+        .iloc[[-1]]
+    )
+
+    # Рассчитываем прогноз
+    forecast = float(
+        best_model.predict(latest_features)[0]
+    )
+
+    latest = float(df["rate"].iloc[-1])
 
     return {
         "forecast": forecast,
-        "selected": selected_name,
+        "selected": best_name,
+        "selected_mae": results[best_name]["mae"],
         "baseline_mae": baseline_error,
+        "baseline_better": (
+            baseline_error <= results[best_name]["mae"]
+        ),
         "results": results,
-        "latest": float(df["rate"].iloc[-1]),
+        "latest": latest,
         "test_dates": y_test.index,
-        "test_actual": y_test,
+        "test_actual": y_test
     }
+    
 
 
 currency = st.selectbox(
@@ -263,7 +258,27 @@ try:
         "Выбранная модель",
         result["selected"]
     )
+st.write(
+    f"Помилка обраної моделі (MAE): "
+    f"{result['selected_mae']:.6f}"
+)
 
+st.write(
+    f"Помилка Baseline (MAE): "
+    f"{result['baseline_mae']:.6f}"
+)
+
+if result["baseline_better"]:
+    st.warning(
+        "Проста модель Baseline показала "
+        "кращу точність на перевірочних даних. "
+        "Прогноз ML-моделі потрібно трактувати обережно."
+    )
+else:
+    st.success(
+        "Обрана ML-модель показала меншу "
+        "помилку, ніж Baseline на перевірочних даних."
+    )
     st.subheader("История курса")
 
     fig = go.Figure()

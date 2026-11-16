@@ -82,10 +82,10 @@ def get_currency_data(code):
         raise ValueError("Дані від НБУ відсутні")
 
     if df["rate"].isna().any():
-    raise ValueError("У даних є пропущені значення")
+        raise ValueError("У даних є пропущені значення")
 
     if (df["rate"] <= 0).any():
-    raise ValueError("Виявлено некоректні значення курсу")
+        raise ValueError("Виявлено некоректні значення курсу")
 
     return df
     

@@ -79,7 +79,7 @@ def get_currency_data(code):
 
     # Перевірка даних
     if df.empty:
-    raise ValueError("Дані від НБУ відсутні")
+        raise ValueError("Дані від НБУ відсутні")
 
     if df["rate"].isna().any():
     raise ValueError("У даних є пропущені значення")

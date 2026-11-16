@@ -63,18 +63,32 @@ def get_currency_data(code):
     df = pd.DataFrame(data)
 
     df["date"] = pd.to_datetime(
-        df["exchangedate"],
-        dayfirst=True
-    )
+    df["exchangedate"],
+    dayfirst=True
+)
 
-    df["rate"] = pd.to_numeric(df["rate"])
+    df["rate"] = pd.to_numeric(
+    df["rate"],
+    errors="coerce"
+)
 
     df = df[["date", "rate"]]
     df = df.drop_duplicates("date")
     df = df.sort_values("date")
     df = df.set_index("date")
 
+    # Перевірка даних
+    if df.empty:
+    raise ValueError("Дані від НБУ відсутні")
+
+    if df["rate"].isna().any():
+    raise ValueError("У даних є пропущені значення")
+
+    if (df["rate"] <= 0).any():
+    raise ValueError("Виявлено некоректні значення курсу")
+
     return df
+    
 
 
 

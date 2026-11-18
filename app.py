@@ -386,6 +386,16 @@ try:
         pd.DataFrame(comparison),
         use_container_width=True
     )
+    
+    st.subheader("Результати Walk-Forward Validation")
+
+    fold_df = pd.DataFrame(result["fold_results"])
+
+    st.dataframe(
+    fold_df,
+    use_container_width=True
+    )
+
 
     st.info(
         "Прогноз относится к следующему опубликованному "

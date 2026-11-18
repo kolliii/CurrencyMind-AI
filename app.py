@@ -9,6 +9,7 @@ from datetime import date
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -136,83 +137,129 @@ FEATURES = [
 
 
 
+
+    
 def analyze_currency(df):
     data = create_features(df)
 
-    if len(data) < 100:
+    if len(data) < 200:
         raise ValueError(
-            "Недостаточно данных для анализа"
+            "Недостатньо даних для Walk-Forward Validation. "
+            "Потрібно щонайменше 200 записів."
         )
 
     X = data[FEATURES]
     y = data["target"]
 
-    # Разделение данных по времени
-    split = int(len(data) * 0.8)
-
-    X_train = X.iloc[:split]
-    X_test = X.iloc[split:]
-
-    y_train = y.iloc[:split]
-    y_test = y.iloc[split:]
-
-    models = {
-        "Ridge": make_pipeline(
-            StandardScaler(),
-            Ridge(alpha=1.0)
-        ),
-        "Random Forest": RandomForestRegressor(
-            n_estimators=300,
-            max_depth=8,
-            min_samples_leaf=2,
-            random_state=42
-        )
-    }
-
-    results = {}
-
-    for name, model in models.items():
-        model.fit(X_train, y_train)
-
-        predictions = model.predict(X_test)
-
-        error = mean_absolute_error(
-            y_test,
-            predictions
-        )
-
-        results[name] = {
-            "model": model,
-            "mae": error
-        }
-
-    # Контрольная модель
-    baseline = X_test["rate"].values
-
-    baseline_error = mean_absolute_error(
-        y_test,
-        baseline
+    # Налаштування Walk-Forward Validation
+    splitter = TimeSeriesSplit(
+        n_splits=5,
+        test_size=30
     )
 
-    # Выбираем лучшую ML-модель
+    # Функція створення моделей
+    def make_models():
+        return {
+            "Ridge": make_pipeline(
+                StandardScaler(),
+                Ridge(alpha=1.0)
+            ),
+
+            "Random Forest": RandomForestRegressor(
+                n_estimators=300,
+                max_depth=8,
+                min_samples_leaf=2,
+                random_state=42
+            )
+        }
+
+    # Зберігання помилок моделей
+    model_errors = {
+        "Ridge": [],
+        "Random Forest": []
+    }
+
+    baseline_errors = []
+    fold_results = []
+
+    # Послідовна перевірка
+    for fold_number, (train_idx, test_idx) in enumerate(
+        splitter.split(X),
+        start=1
+    ):
+
+        X_train = X.iloc[train_idx]
+        X_test = X.iloc[test_idx]
+
+        y_train = y.iloc[train_idx]
+        y_test = y.iloc[test_idx]
+
+        # Baseline: прогноз наступного значення
+        baseline_predictions = X_test["rate"].values
+
+        baseline_error = mean_absolute_error(
+            y_test,
+            baseline_predictions
+        )
+
+        baseline_errors.append(baseline_error)
+
+        fold_record = {
+            "Перевірка": fold_number,
+            "Baseline MAE": baseline_error
+        }
+
+        # Навчання та перевірка моделей
+        for name, model in make_models().items():
+
+            model.fit(X_train, y_train)
+
+            predictions = model.predict(X_test)
+
+            error = mean_absolute_error(
+                y_test,
+                predictions
+            )
+
+            model_errors[name].append(error)
+
+            fold_record[name] = error
+
+        fold_results.append(fold_record)
+
+    # Обчислення середньої помилки
+    results = {}
+
+    for name, errors in model_errors.items():
+
+        results[name] = {
+            "mae": float(np.mean(errors)),
+            "fold_mae": errors
+        }
+
+    baseline_error = float(
+        np.mean(baseline_errors)
+    )
+
+    # Вибір моделі за середньою помилкою
     best_name = min(
         results,
         key=lambda name: results[name]["mae"]
     )
 
-    best_model = results[best_name]["model"]
+    # Фінальне навчання на всій доступній історії
+    best_model = make_models()[best_name]
 
-    # Переобучаем её на всей истории
     best_model.fit(X, y)
 
-    # Последние доступные признаки
+    # Останні доступні ознаки
     latest_features = (
         build_feature_rows(df)
         .dropna(subset=FEATURES)[FEATURES]
         .iloc[[-1]]
     )
 
-    # Рассчитываем прогноз
+    # Навчальна оцінка наступного значення
     forecast = float(
         best_model.predict(latest_features)[0]
     )
@@ -229,9 +276,9 @@ def analyze_currency(df):
         ),
         "results": results,
         "latest": latest,
-        "test_dates": y_test.index,
-        "test_actual": y_test
+        "fold_results": fold_results
     }
+    
     
 
 

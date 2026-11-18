@@ -112,13 +112,23 @@ def build_feature_rows(df):
     return data
 
 
-def create_features(df):
-    data = build_feature_rows(df)
+    def 
+    def create_features(df):
+        data = build_feature_rows(df)
 
-    data["target"] = data["rate"].shift(-1)
+        # Значення, яке потрібно оцінити на наступному спостереженні
+        data["target"] = data["rate"].shift(-1)
 
-    return data.dropna(subset=FEATURES + ["target"])
+        # Дата цього наступного спостереження
+        data["target_date"] = pd.Series(
+        data.index,
+        index=data.index
+        ).shift(-1)
 
+    return data.dropna(
+        subset=FEATURES + ["target", "target_date"]
+    )
+    
 
 
 FEATURES = [
@@ -178,8 +188,22 @@ def analyze_currency(df):
         "Ridge": [],
         "Random Forest": []
     }
+    # Збереження фактичних і прогнозованих значень
+    prediction_records = {
+    "Baseline": [],
+    "Ridge": [],
+    "Random Forest": []
+    }
 
     baseline_errors = []
+    # Збереження результатів Baseline
+    for i in range(len(test_idx)):
+    prediction_records["Baseline"].append({
+        "date": data["target_date"].iloc[test_idx[i]],
+        "actual": float(y_test.iloc[i]),
+        "predicted": float(baseline_predictions[i]),
+        "fold": fold_number
+    })
     fold_results = []
 
     # Послідовна перевірка
@@ -215,6 +239,14 @@ def analyze_currency(df):
             model.fit(X_train, y_train)
 
             predictions = model.predict(X_test)
+
+            for i in range(len(test_idx)):
+            prediction_records[name].append({
+               "date": data["target_date"].iloc[test_idx[i]],
+               "actual": float(y_test.iloc[i]),
+               "predicted": float(predictions[i]),
+               "fold": fold_number
+            })
 
             error = mean_absolute_error(
                 y_test,

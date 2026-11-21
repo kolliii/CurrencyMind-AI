@@ -391,6 +391,51 @@ def analyze_currency(df):
     }
 
 
+def analyze_model_stability(holdout_records, segments=4):
+    data = pd.DataFrame(holdout_records).copy()
+
+    if len(data) < segments:
+        raise ValueError(
+            "Недостатньо даних для аналізу стабільності."
+        )
+
+    data["date"] = pd.to_datetime(data["date"])
+    data = data.sort_values("date").reset_index(drop=True)
+
+    # Ділимо Holdout на послідовні часові сегменти.
+    data["segment"] = pd.qcut(
+        np.arange(len(data)),
+        q=segments,
+        labels=False,
+        duplicates="drop"
+    ) + 1
+
+    models = ["Baseline", "Ridge", "Random Forest"]
+
+    results = []
+
+    for segment_number, group in data.groupby("segment"):
+
+        for model_name in models:
+
+            errors = (
+                group["actual"] - group[model_name]
+            )
+
+            results.append({
+                "Сегмент": int(segment_number),
+                "Модель": model_name,
+                "MAE": float(errors.abs().mean()),
+                "RMSE": float(
+                    np.sqrt((errors ** 2).mean())
+                ),
+                "Середня помилка": float(errors.mean()),
+                "Кількість спостережень": len(group)
+            })
+
+    return pd.DataFrame(results)
+
+
 currency = st.selectbox(
     "Выбери валюту",
     list(CURRENCIES.keys())
@@ -697,123 +742,77 @@ try:
         use_container_width=True
     )
 
-    # Сравнение моделей
-    st.subheader("Сравнение моделей")
+    st.subheader("Аналіз стабільності моделей")
 
-    comparison = [{
-        "Модель": "Baseline",
-        "MAE": result["baseline_mae"]
-    }]
+    stability_df = analyze_model_stability(
+        result["holdout_records"],
+        segments=4
+    )
 
-    for name, item in result["results"].items():
-        comparison.append({
-            "Модель": name,
-            "MAE": item["mae"]
-        })
+    st.write("Якість моделей на різних часових сегментах:")
 
     st.dataframe(
-        pd.DataFrame(comparison),
+        stability_df.round(4),
         use_container_width=True
     )
 
-    # График фактических и прогнозируемых значений
-    st.subheader("Фактичні значення та прогнози моделей")
+    st.subheader("Зміна MAE між часовими сегментами")
 
-    actual_df = pd.DataFrame(
-        result["prediction_records"]["Baseline"]
-    ).sort_values("date")
+    stability_chart = go.Figure()
 
-    fig_predictions = go.Figure()
-
-    # Фактический курс
-    fig_predictions.add_trace(go.Scatter(
-        x=actual_df["date"],
-        y=actual_df["actual"],
-        mode="lines",
-        name="Фактичне значення"
-    ))
-
-    # Прогнозы каждой модели
     for model_name in ["Baseline", "Ridge", "Random Forest"]:
-        model_df = pd.DataFrame(
-            result["prediction_records"][model_name]
-        ).sort_values("date")
 
-        fig_predictions.add_trace(go.Scatter(
-            x=model_df["date"],
-            y=model_df["predicted"],
-            mode="lines",
-            name=f"Прогноз {model_name}"
+        model_data = stability_df[
+            stability_df["Модель"] == model_name
+        ]
+
+        stability_chart.add_trace(go.Scatter(
+            x=model_data["Сегмент"],
+            y=model_data["MAE"],
+            mode="lines+markers",
+            name=model_name
         ))
 
-    fig_predictions.update_layout(
-        xaxis_title="Дата",
-        yaxis_title="Офіційний курс, UAH",
+    stability_chart.update_layout(
+        title="MAE моделей на часових сегментах",
+        xaxis_title="Часовий сегмент Holdout",
+        yaxis_title="MAE, UAH",
         template="plotly_dark",
         hovermode="x unified"
     )
 
     st.plotly_chart(
-        fig_predictions,
+        stability_chart,
         use_container_width=True
     )
 
-    # Таблица и график результатов Walk-Forward Validation
-    fold_df = pd.DataFrame(result["fold_results"])
+    st.subheader("Підсумкова оцінка стабільності")
 
-    st.subheader("Помилки моделей за перевірками")
-
-    fold_chart = go.Figure()
-
-    for column in [
-        "Baseline MAE",
-        "Ridge",
-        "Random Forest"
-    ]:
-        fold_chart.add_trace(go.Bar(
-            x=fold_df["Перевірка"],
-            y=fold_df[column],
-            name=column
-        ))
-
-    fold_chart.update_layout(
-        xaxis_title="Номер перевірки",
-        yaxis_title="MAE, UAH",
-        barmode="group",
-        template="plotly_dark"
+    stability_summary = (
+        stability_df
+        .groupby("Модель")
+        .agg(
+            Середня_MAE=("MAE", "mean"),
+            Мінімальна_MAE=("MAE", "min"),
+            Максимальна_MAE=("MAE", "max"),
+            Мінливість_MAE=("MAE", "std")
+        )
+        .reset_index()
     )
 
-    st.plotly_chart(
-        fold_chart,
-        use_container_width=True
+    stability_summary = stability_summary.sort_values(
+        "Мінливість_MAE"
     )
-
-    st.subheader("Результати Walk-Forward Validation")
 
     st.dataframe(
-        fold_df,
+        stability_summary.round(4),
         use_container_width=True
     )
 
-    st.info(
-        "Прогноз относится к следующему опубликованному "
-        "значению официального курса. "
-        "Это экспериментальная оценка, а не гарантия."
-    )
+    st.download_button(
+        label="Завантажити аналіз стабільності CSV",
+        data=stability_df.to_csv(
+            index=False
+        ).encode("utf-8-sig"),
+        file_name="currencymind_stability_report. 
 
-except Exception as error:
-    st.error(
-        f"Не удалось выполнить анализ: {error}"
-    )
-
-st.divider()
-
-st.caption(
-    "Источник валютных данных: Национальный банк Украины. "
-    "Проект предназначен для обучения и исследования."
-    )
-    
-
-    
-    
-    

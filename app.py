@@ -458,16 +458,16 @@ try:
         hovermode="x unified"
    )
 
-  st.plotly_chart(
-  fig_predictions,
-  use_container_width=True
+        st.plotly_chart(
+        fig_predictions,
+        use_container_width=True
   )
 
   
 # Графік помилок на кожній перевірці
-    st.subheader("Помилки моделей за перевірками")
+        st.subheader("Помилки моделей за перевірками")
 
-fold_chart = go.Figure()
+        fold_chart = go.Figure()
 
 for column in [
     "Baseline MAE",

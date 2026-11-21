@@ -423,18 +423,18 @@ try:
     # Графік фактичних і прогнозованих значень
     st.subheader("Фактичні значення та прогнози моделей")
 
-        actual_df = pd.DataFrame(
-        result["prediction_records"]["Baseline"]
-        ).sort_values("date")
+    actual_df = pd.DataFrame(
+    result["prediction_records"]["Baseline"]
+    ).sort_values("date")
 
-        fig_predictions = go.Figure()
+    fig_predictions = go.Figure()
 
     # Фактичний курс
-        fig_predictions.add_trace(go.Scatter(
-        x=actual_df["date"],
-        y=actual_df["actual"],
-        mode="lines",
-        name="Фактичне значення"
+    fig_predictions.add_trace(go.Scatter(
+    x=actual_df["date"],
+    y=actual_df["actual"],
+    mode="lines",
+    name="Фактичне значення"
     ))
 
     # Прогнози кожної моделі
@@ -451,16 +451,16 @@ try:
         name=f"Прогноз {model_name}"
    ))
 
-    fig_predictions.update_layout(
-    xaxis_title="Дата",
-    yaxis_title="Офіційний курс, UAH",
-    template="plotly_dark",
-    hovermode="x unified"
-  )
+        fig_predictions.update_layout(
+        xaxis_title="Дата",
+        yaxis_title="Офіційний курс, UAH",
+        template="plotly_dark",
+        hovermode="x unified"
+   )
 
   st.plotly_chart(
-     fig_predictions,
-     use_container_width=True
+  fig_predictions,
+  use_container_width=True
   )
 
   

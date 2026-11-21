@@ -330,6 +330,26 @@ def analyze_currency(df):
 
         holdout_records.append(record)
 
+    # Розрахунок залишків для кожної моделі.
+    holdout_residuals = []
+
+    for record in holdout_records:
+
+        residual_record = {
+            "date": record["date"],
+            "Baseline": (
+                record["actual"] - record["Baseline"]
+            ),
+            "Ridge": (
+                record["actual"] - record["Ridge"]
+            ),
+            "Random Forest": (
+                record["actual"] - record["Random Forest"]
+            )
+        }
+
+        holdout_residuals.append(residual_record)
+
     # Отримуємо помилку обраної моделі.
     holdout_mae = holdout_results[best_name]["mae"]
 
@@ -366,7 +386,8 @@ def analyze_currency(df):
         "holdout_mae": float(holdout_mae),
         "holdout_baseline_mae": float(holdout_baseline_mae),
         "holdout_records": holdout_records,
-        "holdout_results": holdout_results
+        "holdout_results": holdout_results,
+        "holdout_residuals": holdout_residuals
     }
 
 
@@ -537,6 +558,90 @@ try:
         use_container_width=True
     )
 
+    st.subheader("Статистика помилок моделей")
+
+    residual_df = pd.DataFrame(
+        result["holdout_residuals"]
+    )
+
+    residual_summary = []
+
+    for model_name in ["Baseline", "Ridge", "Random Forest"]:
+
+        residuals = residual_df[model_name]
+
+        residual_summary.append({
+            "Модель": model_name,
+            "Середня помилка": residuals.mean(),
+            "Стандартне відхилення": residuals.std(),
+            "Найбільша абсолютна помилка": residuals.abs().max()
+        })
+
+    summary_df = pd.DataFrame(residual_summary)
+
+    st.dataframe(
+        summary_df.round(4),
+        use_container_width=True
+    )
+
+    st.subheader("Залишки моделей у часі")
+
+    residual_chart = go.Figure()
+
+    for model_name in ["Baseline", "Ridge", "Random Forest"]:
+
+        residual_chart.add_trace(go.Scatter(
+            x=residual_df["date"],
+            y=residual_df[model_name],
+            mode="lines",
+            name=model_name
+        ))
+
+    residual_chart.add_hline(
+        y=0,
+        line_dash="dash",
+        annotation_text="Нульова помилка"
+    )
+
+    residual_chart.update_layout(
+        title="Як змінювалися помилки моделей",
+        xaxis_title="Дата",
+        yaxis_title="Залишок, UAH",
+        template="plotly_dark",
+        hovermode="x unified"
+    )
+
+    st.plotly_chart(
+        residual_chart,
+        use_container_width=True
+    )
+
+    st.subheader("Розподіл залишків")
+
+    histogram = go.Figure()
+
+    for model_name in ["Baseline", "Ridge", "Random Forest"]:
+
+        histogram.add_trace(go.Histogram(
+            x=residual_df[model_name],
+            name=model_name,
+            opacity=0.6,
+            nbinsx=30
+        ))
+
+    histogram.update_layout(
+        title="Розподіл помилок моделей",
+        xaxis_title="Залишок, UAH",
+        yaxis_title="Кількість спостережень",
+        barmode="overlay",
+        template="plotly_dark"
+    )
+
+    st.plotly_chart(
+        histogram,
+        use_container_width=True
+    )
+
     # Сравнение моделей
     st.subheader("Сравнение моделей")
 
@@ -651,12 +756,6 @@ st.divider()
 st.caption(
     "Источник валютных данных: Национальный банк Украины. "
     "Проект предназначен для обучения и исследования."
-)
+    )
 
 
-    
-                                
-
-
-
-                                            

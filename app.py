@@ -112,7 +112,6 @@ def build_feature_rows(df):
     return data
 
 
-    def 
     def create_features(df):
         data = build_feature_rows(df)
 

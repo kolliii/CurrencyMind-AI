@@ -814,5 +814,130 @@ try:
         data=stability_df.to_csv(
             index=False
         ).encode("utf-8-sig"),
-        file_name="currencymind_stability_report. 
+        file_name="currencymind_stability_report.csv",
+        mime="text/csv"
+    )
+    # Сравнение моделей
+    st.subheader("Сравнение моделей")
 
+    comparison = [{
+        "Модель": "Baseline",
+        "MAE": result["baseline_mae"]
+    }]
+
+    for name, item in result["results"].items():
+        comparison.append({
+            "Модель": name,
+            "MAE": item["mae"]
+        })
+
+    st.dataframe(
+        pd.DataFrame(comparison),
+        use_container_width=True
+    )
+
+    # График фактических и прогнозируемых значений
+    st.subheader("Фактичні значення та прогнози моделей")
+
+    actual_df = pd.DataFrame(
+        result["prediction_records"]["Baseline"]
+    ).sort_values("date")
+
+    fig_predictions = go.Figure()
+
+    # Фактический курс
+    fig_predictions.add_trace(go.Scatter(
+        x=actual_df["date"],
+        y=actual_df["actual"],
+        mode="lines",
+        name="Фактичне значення"
+    ))
+
+    # Прогнозы каждой модели
+    for model_name in ["Baseline", "Ridge", "Random Forest"]:
+        model_df = pd.DataFrame(
+            result["prediction_records"][model_name]
+        ).sort_values("date")
+
+        fig_predictions.add_trace(go.Scatter(
+            x=model_df["date"],
+            y=model_df["predicted"],
+            mode="lines",
+            name=f"Прогноз {model_name}"
+        ))
+
+    fig_predictions.update_layout(
+        xaxis_title="Дата",
+        yaxis_title="Офіційний курс, UAH",
+        template="plotly_dark",
+        hovermode="x unified"
+    )
+
+    st.plotly_chart(
+        fig_predictions,
+        use_container_width=True
+    )
+
+    # Таблица и график результатов Walk-Forward Validation
+    fold_df = pd.DataFrame(result["fold_results"])
+
+    st.subheader("Помилки моделей за перевірками")
+
+    fold_chart = go.Figure()
+
+    for column in [
+        "Baseline MAE",
+        "Ridge",
+        "Random Forest"
+    ]:
+        fold_chart.add_trace(go.Bar(
+            x=fold_df["Перевірка"],
+            y=fold_df[column],
+            name=column
+        ))
+
+    fold_chart.update_layout(
+        xaxis_title="Номер перевірки",
+        yaxis_title="MAE, UAH",
+        barmode="group",
+        template="plotly_dark"
+    )
+
+    st.plotly_chart(
+        fold_chart,
+        use_container_width=True
+    )
+
+    st.subheader("Результати Walk-Forward Validation")
+
+    st.dataframe(
+        fold_df,
+        use_container_width=True
+    )
+
+    st.info(
+        "Прогноз относится к следующему опубликованному "
+        "значению официального курса. "
+        "Это экспериментальная оценка, а не гарантия."
+    )
+
+except Exception as error:
+    st.error(
+        f"Не удалось выполнить анализ: {error}"
+    )
+
+st.divider()
+
+st.caption(
+    "Источник валютных данных: Национальный банк Украины. "
+    "Проект предназначен для обучения и исследования."
+)
+
+        
+
+                        
+            
+
+
+
+            

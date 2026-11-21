@@ -572,7 +572,12 @@ try:
 
         residual_summary.append({
             "Модель": model_name,
+            "MAE": residuals.abs().mean(),
+            "RMSE": np.sqrt(
+                (residuals ** 2).mean()
+            ),
             "Середня помилка": residuals.mean(),
+            "Медіанна абсолютна помилка": residuals.abs().median(),
             "Стандартне відхилення": residuals.std(),
             "Найбільша абсолютна помилка": residuals.abs().max()
         })
@@ -582,6 +587,56 @@ try:
     st.dataframe(
         summary_df.round(4),
         use_container_width=True
+    )
+
+    st.subheader("Автоматичний підсумок")
+
+    best_holdout_name = min(
+        result["holdout_results"],
+        key=lambda name: result["holdout_results"][name]["mae"]
+    )
+
+    best_holdout_mae = result["holdout_results"][best_holdout_name]["mae"]
+
+    st.metric(
+        "Найменша MAE на Holdout",
+        f"{best_holdout_mae:.4f} UAH",
+        help="Найменша середня абсолютна помилка серед перевірених методів."
+    )
+
+    st.write(
+        f"Метод із найменшою MAE на незалежному тестовому "
+        f"періоді: **{best_holdout_name}**."
+    )
+
+    if best_holdout_name == "Baseline":
+        st.warning(
+            "Складніші моделі не перевершили простий базовий метод "
+            "за MAE на цьому тестовому періоді."
+        )
+    else:
+        st.info(
+            f"{best_holdout_name} показав меншу MAE, "
+            "ніж інші перевірені методи на цьому тестовому періоді."
+        )
+
+    st.subheader("Експорт звіту")
+
+    report_csv = summary_df.to_csv(
+        index=False
+    ).encode("utf-8-sig")
+
+    st.download_button(
+        label="Завантажити звіт CSV",
+        data=report_csv,
+        file_name="currencymind_model_report.csv",
+        mime="text/csv"
+    )
+
+    st.caption(
+        "Звіт сформовано на основі незалежного історичного "
+        "тестового періоду. Показники не гарантують аналогічної "
+        "якості на майбутніх даних."
     )
 
     st.subheader("Залишки моделей у часі")
@@ -757,5 +812,8 @@ st.caption(
     "Источник валютных данных: Национальный банк Украины. "
     "Проект предназначен для обучения и исследования."
     )
+    
 
-
+    
+    
+    

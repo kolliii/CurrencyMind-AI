@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -36,8 +35,8 @@ def get_currency_data(code):
     end = date.today().strftime("%Y%m%d")
 
     url = (
-    "https://bank.gov.ua/NBU_Exchange/"
-    "exchange_site"
+        "https://bank.gov.ua/NBU_Exchange/"
+        "exchange_site"
     )
 
     params = {
@@ -64,21 +63,21 @@ def get_currency_data(code):
     df = pd.DataFrame(data)
 
     df["date"] = pd.to_datetime(
-    df["exchangedate"],
-    dayfirst=True
-)
+        df["exchangedate"],
+        dayfirst=True
+    )
 
     df["rate"] = pd.to_numeric(
-    df["rate"],
-    errors="coerce"
-)
+        df["rate"],
+        errors="coerce"
+    )
 
     df = df[["date", "rate"]]
     df = df.drop_duplicates("date")
     df = df.sort_values("date")
     df = df.set_index("date")
 
-    # Перевірка даних
+    # Проверка данных
     if df.empty:
         raise ValueError("Дані від НБУ відсутні")
 
@@ -89,8 +88,6 @@ def get_currency_data(code):
         raise ValueError("Виявлено некоректні значення курсу")
 
     return df
-    
-
 
 
 def build_feature_rows(df):
@@ -112,24 +109,6 @@ def build_feature_rows(df):
     return data
 
 
-    def create_features(df):
-        data = build_feature_rows(df)
-
-        # Значення, яке потрібно оцінити на наступному спостереженні
-        data["target"] = data["rate"].shift(-1)
-
-        # Дата цього наступного спостереження
-        data["target_date"] = pd.Series(
-        data.index,
-        index=data.index
-        ).shift(-1)
-
-    return data.dropna(
-        subset=FEATURES + ["target", "target_date"]
-    )
-    
-
-
 FEATURES = [
     "rate",
     "lag_1",
@@ -145,35 +124,48 @@ FEATURES = [
 ]
 
 
+def create_features(df):
+    data = build_feature_rows(df)
+
+    # Значение, которое нужно оценить на следующем наблюдении
+    data["target"] = data["rate"].shift(-1)
+
+    # Дата этого следующего наблюдения
+    data["target_date"] = pd.Series(
+        data.index,
+        index=data.index
+    ).shift(-1)
+
+    return data.dropna(
+        subset=FEATURES + ["target", "target_date"]
+    )
 
 
-    
 def analyze_currency(df):
     data = create_features(df)
 
     if len(data) < 200:
         raise ValueError(
-            "Недостатньо даних для Walk-Forward Validation. "
+            "Недостаточно данных для Walk-Forward Validation. "
             "Потрібно щонайменше 200 записів."
         )
 
     X = data[FEATURES]
     y = data["target"]
 
-    # Налаштування Walk-Forward Validation
+    # Настройка Walk-Forward Validation
     splitter = TimeSeriesSplit(
         n_splits=5,
         test_size=30
     )
 
-    # Функція створення моделей
+    # Функция создания моделей
     def make_models():
         return {
             "Ridge": make_pipeline(
                 StandardScaler(),
                 Ridge(alpha=1.0)
             ),
-
             "Random Forest": RandomForestRegressor(
                 n_estimators=300,
                 max_depth=8,
@@ -182,35 +174,34 @@ def analyze_currency(df):
             )
         }
 
-    # Зберігання помилок моделей
+    # Хранение ошибок моделей
     model_errors = {
         "Ridge": [],
         "Random Forest": []
     }
-    # Збереження фактичних і прогнозованих значень
+
+    # Сохранение фактических и прогнозируемых значений
     prediction_records = {
-    "Baseline": [],
-    "Ridge": [],
-    "Random Forest": []
+        "Baseline": [],
+        "Ridge": [],
+        "Random Forest": []
     }
 
     baseline_errors = []
-    
     fold_results = []
 
-    # Послідовна перевірка
+    # Последовательная проверка
     for fold_number, (train_idx, test_idx) in enumerate(
         splitter.split(X),
         start=1
     ):
-
         X_train = X.iloc[train_idx]
         X_test = X.iloc[test_idx]
 
         y_train = y.iloc[train_idx]
         y_test = y.iloc[test_idx]
 
-        # Baseline: прогноз наступного значення
+        # Baseline: прогноз следующего значения
         baseline_predictions = X_test["rate"].values
 
         baseline_error = mean_absolute_error(
@@ -219,34 +210,34 @@ def analyze_currency(df):
         )
 
         baseline_errors.append(baseline_error)
-        # Збереження результатів Baseline
+
+        # Сохранение результатов Baseline
         for i in range(len(test_idx)):
             prediction_records["Baseline"].append({
-            "date": data["target_date"].iloc[test_idx[i]],
-            "actual": float(y_test.iloc[i]),
-            "predicted": float(baseline_predictions[i]),
-            "fold": fold_number
-        })
+                "date": data["target_date"].iloc[test_idx[i]],
+                "actual": float(y_test.iloc[i]),
+                "predicted": float(baseline_predictions[i]),
+                "fold": fold_number
+            })
 
         fold_record = {
             "Перевірка": fold_number,
             "Baseline MAE": baseline_error
         }
 
-        # Навчання та перевірка моделей
+        # Обучение и проверка моделей
         for name, model in make_models().items():
-
             model.fit(X_train, y_train)
 
             predictions = model.predict(X_test)
 
             for i in range(len(test_idx)):
                 prediction_records[name].append({
-                "date": data["target_date"].iloc[test_idx[i]],
-                "actual": float(y_test.iloc[i]),
-                "predicted": float(predictions[i]),
-                "fold": fold_number
-            })
+                    "date": data["target_date"].iloc[test_idx[i]],
+                    "actual": float(y_test.iloc[i]),
+                    "predicted": float(predictions[i]),
+                    "fold": fold_number
+                })
 
             error = mean_absolute_error(
                 y_test,
@@ -254,16 +245,14 @@ def analyze_currency(df):
             )
 
             model_errors[name].append(error)
-
             fold_record[name] = error
 
         fold_results.append(fold_record)
 
-    # Обчислення середньої помилки
+    # Вычисление средней ошибки
     results = {}
 
     for name, errors in model_errors.items():
-
         results[name] = {
             "mae": float(np.mean(errors)),
             "fold_mae": errors
@@ -273,25 +262,24 @@ def analyze_currency(df):
         np.mean(baseline_errors)
     )
 
-    # Вибір моделі за середньою помилкою
+    # Выбор модели по средней ошибке
     best_name = min(
         results,
         key=lambda name: results[name]["mae"]
     )
 
-    # Фінальне навчання на всій доступній історії
+    # Финальное обучение на всей доступной истории
     best_model = make_models()[best_name]
-
     best_model.fit(X, y)
 
-    # Останні доступні ознаки
+    # Последние доступные признаки
     latest_features = (
         build_feature_rows(df)
         .dropna(subset=FEATURES)[FEATURES]
         .iloc[[-1]]
     )
 
-    # Навчальна оцінка наступного значення
+    # Учебная оценка следующего значения
     forecast = float(
         best_model.predict(latest_features)[0]
     )
@@ -311,8 +299,6 @@ def analyze_currency(df):
         "fold_results": fold_results,
         "prediction_records": prediction_records
     }
-    
-    
 
 
 currency = st.selectbox(
@@ -419,88 +405,85 @@ try:
         pd.DataFrame(comparison),
         use_container_width=True
     )
-    
-    # Графік фактичних і прогнозованих значень
+
+    # График фактических и прогнозируемых значений
     st.subheader("Фактичні значення та прогнози моделей")
 
     actual_df = pd.DataFrame(
-    result["prediction_records"]["Baseline"]
+        result["prediction_records"]["Baseline"]
     ).sort_values("date")
 
     fig_predictions = go.Figure()
 
-    # Фактичний курс
+    # Фактический курс
     fig_predictions.add_trace(go.Scatter(
-    x=actual_df["date"],
-    y=actual_df["actual"],
-    mode="lines",
-    name="Фактичне значення"
+        x=actual_df["date"],
+        y=actual_df["actual"],
+        mode="lines",
+        name="Фактичне значення"
     ))
 
-    # Прогнози кожної моделі
+    # Прогнозы каждой модели
     for model_name in ["Baseline", "Ridge", "Random Forest"]:
-
         model_df = pd.DataFrame(
-        result["prediction_records"][model_name]
+            result["prediction_records"][model_name]
         ).sort_values("date")
 
         fig_predictions.add_trace(go.Scatter(
-        x=model_df["date"],
-        y=model_df["predicted"],
-        mode="lines",
-        name=f"Прогноз {model_name}"
-   ))
+            x=model_df["date"],
+            y=model_df["predicted"],
+            mode="lines",
+            name=f"Прогноз {model_name}"
+        ))
 
-        fig_predictions.update_layout(
+    fig_predictions.update_layout(
         xaxis_title="Дата",
         yaxis_title="Офіційний курс, UAH",
         template="plotly_dark",
         hovermode="x unified"
-   )
+    )
 
-        st.plotly_chart(
+    st.plotly_chart(
         fig_predictions,
         use_container_width=True
-  )
+    )
 
-  
-# Графік помилок на кожній перевірці
-        st.subheader("Помилки моделей за перевірками")
+    # Таблица и график результатов Walk-Forward Validation
+    fold_df = pd.DataFrame(result["fold_results"])
 
-        fold_chart = go.Figure()
+    st.subheader("Помилки моделей за перевірками")
 
-for column in [
-    "Baseline MAE",
-    "Ridge",
-    "Random Forest"
-]:
-    fold_chart.add_trace(go.Bar(
-        x=fold_df["Перевірка"],
-        y=fold_df[column],
-        name=column
-    ))
+    fold_chart = go.Figure()
 
-fold_chart.update_layout(
-    xaxis_title="Номер перевірки",
-    yaxis_title="MAE, UAH",
-    barmode="group",
-    template="plotly_dark"
-)
+    for column in [
+        "Baseline MAE",
+        "Ridge",
+        "Random Forest"
+    ]:
+        fold_chart.add_trace(go.Bar(
+            x=fold_df["Перевірка"],
+            y=fold_df[column],
+            name=column
+        ))
 
-st.plotly_chart(
-    fold_chart,
-    use_container_width=True
-)
+    fold_chart.update_layout(
+        xaxis_title="Номер перевірки",
+        yaxis_title="MAE, UAH",
+        barmode="group",
+        template="plotly_dark"
+    )
+
+    st.plotly_chart(
+        fold_chart,
+        use_container_width=True
+    )
 
     st.subheader("Результати Walk-Forward Validation")
 
-    fold_df = pd.DataFrame(result["fold_results"])
-
     st.dataframe(
-    fold_df,
-    use_container_width=True
+        fold_df,
+        use_container_width=True
     )
-
 
     st.info(
         "Прогноз относится к следующему опубликованному "
@@ -522,4 +505,8 @@ st.caption(
 
 
 
+                
+                
+
+    
     

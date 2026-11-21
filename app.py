@@ -320,7 +320,7 @@ def analyze_currency(df):
         record = {
             "date": data["target_date"].iloc[development_end + i],
             "actual": float(y_holdout.iloc[i]),
-            "baseline": float(holdout_baseline_predictions[i])
+            "Baseline": float(holdout_baseline_predictions[i])
         }
 
         for name in ["Ridge", "Random Forest"]:
@@ -652,8 +652,10 @@ st.caption(
     "Источник валютных данных: Национальный банк Украины. "
     "Проект предназначен для обучения и исследования."
 )
-        
 
+
+    
+                                
 
 
 

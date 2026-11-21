@@ -436,6 +436,47 @@ def analyze_model_stability(holdout_records, segments=4):
     return pd.DataFrame(results)
 
 
+def calculate_feature_importance(df):
+
+    data = create_features(df)
+
+    if len(data) < 200:
+        raise ValueError(
+            "Недостатньо даних для аналізу важливості ознак."
+        )
+
+    X = data[FEATURES]
+    y = data["target"]
+
+    # Використовуємо хронологічний поділ.
+    split_index = int(len(data) * 0.8)
+
+    X_train = X.iloc[:split_index]
+    y_train = y.iloc[:split_index]
+
+    # Навчаємо Random Forest.
+    model = RandomForestRegressor(
+        n_estimators=300,
+        max_depth=8,
+        min_samples_leaf=2,
+        random_state=42
+    )
+
+    model.fit(X_train, y_train)
+
+    importance_df = pd.DataFrame({
+        "Ознака": FEATURES,
+        "Важливість": model.feature_importances_
+    })
+
+    importance_df = importance_df.sort_values(
+        "Важливість",
+        ascending=False
+    ).reset_index(drop=True)
+
+    return importance_df
+
+
 currency = st.selectbox(
     "Выбери валюту",
     list(CURRENCIES.keys())
@@ -778,45 +819,43 @@ try:
         xaxis_title="Часовий сегмент Holdout",
         yaxis_title="MAE, UAH",
         template="plotly_dark",
-        hovermode="x unified"
+        yaxis=dict(autorange="reversed")
     )
 
     st.plotly_chart(
-        stability_chart,
+        importance_chart,
         use_container_width=True
     )
 
-    st.subheader("Підсумкова оцінка стабільності")
+    st.subheader("Інтерпретація результатів")
 
-    stability_summary = (
-        stability_df
-        .groupby("Модель")
-        .agg(
-            Середня_MAE=("MAE", "mean"),
-            Мінімальна_MAE=("MAE", "min"),
-            Максимальна_MAE=("MAE", "max"),
-            Мінливість_MAE=("MAE", "std")
+    top_features = importance_df.head(3)
+
+    st.write("Три ознаки з найбільшою важливістю:")
+
+    for _, row in top_features.iterrows():
+
+        st.write(
+            f"**{row['Ознака']}** — "
+            f"{row['Важливість']:.4f}"
         )
-        .reset_index()
-    )
 
-    stability_summary = stability_summary.sort_values(
-        "Мінливість_MAE"
-    )
-
-    st.dataframe(
-        stability_summary.round(4),
-        use_container_width=True
+    st.caption(
+        "Важливість відображає внесок ознак у розбиття "
+        "дерев Random Forest. Вона не доводить причинного "
+        "впливу та може залежати від набору даних і "
+        "корельованості ознак."
     )
 
     st.download_button(
-        label="Завантажити аналіз стабільності CSV",
-        data=stability_df.to_csv(
+        label="Завантажити Feature Importance CSV",
+        data=importance_df.to_csv(
             index=False
         ).encode("utf-8-sig"),
-        file_name="currencymind_stability_report.csv",
+        file_name="currencymind_feature_importance.csv",
         mime="text/csv"
     )
+
     # Сравнение моделей
     st.subheader("Сравнение моделей")
 
@@ -932,12 +971,6 @@ st.caption(
     "Источник валютных данных: Национальный банк Украины. "
     "Проект предназначен для обучения и исследования."
 )
-
+ 
         
-
-                        
-            
-
-
-
-            
+    

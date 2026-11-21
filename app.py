@@ -272,49 +272,68 @@ def analyze_currency(df):
         np.mean(baseline_errors)
     )
 
+    # Обираємо модель за результатами Walk-Forward.
     best_name = min(
         results,
         key=lambda name: results[name]["mae"]
     )
 
-    # Створюємо обрану модель.
-    # Навчаємо її лише на перших 80% даних.
-    holdout_model = make_models()[best_name]
+    # Зберігаємо результати незалежної перевірки.
+    holdout_results = {}
+    holdout_predictions_all = {}
 
-    holdout_model.fit(
-        X_development,
-        y_development
-    )
+    # Перевіряємо кожну модель на однаковому тестовому періоді.
+    for name, model in make_models().items():
 
-    # Перевіряємо модель на останніх 20%.
-    holdout_predictions = holdout_model.predict(X_holdout)
+        model.fit(X_development, y_development)
 
-    # Порівнюємо з простим базовим методом.
+        predictions = model.predict(X_holdout)
+
+        error = mean_absolute_error(
+            y_holdout,
+            predictions
+        )
+
+        holdout_results[name] = {
+            "mae": float(error)
+        }
+
+        holdout_predictions_all[name] = predictions
+
+    # Перевіряємо базовий метод.
     holdout_baseline_predictions = X_holdout["rate"].values
-
-    holdout_mae = mean_absolute_error(
-        y_holdout,
-        holdout_predictions
-    )
 
     holdout_baseline_mae = mean_absolute_error(
         y_holdout,
         holdout_baseline_predictions
     )
 
-    # Зберігаємо результати фінальної перевірки.
+    holdout_results["Baseline"] = {
+        "mae": float(holdout_baseline_mae)
+    }
+
+    # Зберігаємо значення для графіка.
     holdout_records = []
 
     for i in range(len(X_holdout)):
-        holdout_records.append({
+
+        record = {
             "date": data["target_date"].iloc[development_end + i],
             "actual": float(y_holdout.iloc[i]),
-            "predicted": float(holdout_predictions[i]),
             "baseline": float(holdout_baseline_predictions[i])
-        })
+        }
 
-    # Тепер навчаємо окрему фінальну модель
-    # на всій доступній історії для експериментального прогнозу.
+        for name in ["Ridge", "Random Forest"]:
+            record[name] = float(
+                holdout_predictions_all[name][i]
+            )
+
+        holdout_records.append(record)
+
+    # Отримуємо помилку обраної моделі.
+    holdout_mae = holdout_results[best_name]["mae"]
+
+    # Після перевірки навчаємо модель на всіх доступних даних.
     best_model = make_models()[best_name]
     best_model.fit(X, y)
 
@@ -346,7 +365,8 @@ def analyze_currency(df):
         "prediction_records": prediction_records,
         "holdout_mae": float(holdout_mae),
         "holdout_baseline_mae": float(holdout_baseline_mae),
-        "holdout_records": holdout_records
+        "holdout_records": holdout_records,
+        "holdout_results": holdout_results
     }
 
 
@@ -438,6 +458,26 @@ try:
 
     st.subheader("Незалежна фінальна перевірка")
 
+    st.write(
+        "Порівняння всіх алгоритмів на незалежному "
+        "тестовому періоді:"
+    )
+
+    holdout_comparison = pd.DataFrame([
+        {
+            "Модель": name,
+            "MAE": values["mae"]
+        }
+        for name, values in result["holdout_results"].items()
+    ])
+
+    holdout_comparison = holdout_comparison.sort_values("MAE")
+
+    st.dataframe(
+        holdout_comparison,
+        use_container_width=True
+    )
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -475,22 +515,17 @@ try:
         name="Фактичні значення"
     ))
 
-    holdout_chart.add_trace(go.Scatter(
-        x=holdout_df["date"],
-        y=holdout_df["predicted"],
-        mode="lines",
-        name="Обрана модель"
-    ))
+    for model_name in ["Baseline", "Ridge", "Random Forest"]:
 
-    holdout_chart.add_trace(go.Scatter(
-        x=holdout_df["date"],
-        y=holdout_df["baseline"],
-        mode="lines",
-        name="Базовий метод"
-    ))
+        holdout_chart.add_trace(go.Scatter(
+            x=holdout_df["date"],
+            y=holdout_df[model_name],
+            mode="lines",
+            name=model_name
+        ))
 
     holdout_chart.update_layout(
-        title="Результати на незалежному тестовому періоді",
+        title="Порівняння моделей на незалежних даних",
         xaxis_title="Дата",
         yaxis_title="Офіційний курс, UAH",
         template="plotly_dark",
@@ -616,4 +651,10 @@ st.divider()
 st.caption(
     "Источник валютных данных: Национальный банк Украины. "
     "Проект предназначен для обучения и исследования."
-    )
+)
+        
+
+
+
+
+                                            

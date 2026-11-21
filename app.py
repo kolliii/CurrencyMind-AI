@@ -153,12 +153,22 @@ def analyze_currency(df):
     X = data[FEATURES]
     y = data["target"]
 
-    # Настройка Walk-Forward Validation
+    # Останні 20% даних залишаємо
+    # для незалежної фінальної перевірки.
+    holdout_size = max(30, int(len(X) * 0.2))
+    development_end = len(X) - holdout_size
+
+    X_development = X.iloc[:development_end]
+    y_development = y.iloc[:development_end]
+ 
+    X_holdout = X.iloc[development_end:]
+    y_holdout = y.iloc[development_end:]
+
     splitter = TimeSeriesSplit(
         n_splits=5,
         test_size=30
     )
-
+    
     # Функция создания моделей
     def make_models():
         return {
@@ -192,7 +202,7 @@ def analyze_currency(df):
 
     # Последовательная проверка
     for fold_number, (train_idx, test_idx) in enumerate(
-        splitter.split(X),
+        splitter.split(X_development)
         start=1
     ):
         X_train = X.iloc[train_idx]
@@ -262,13 +272,49 @@ def analyze_currency(df):
         np.mean(baseline_errors)
     )
 
-    # Выбор модели по средней ошибке
     best_name = min(
-        results,
-        key=lambda name: results[name]["mae"]
+    results,
+    key=lambda name: results[name]["mae"]
+)
+
+    # Створюємо обрану модель.
+    # Навчаємо її лише на перших 80% даних.
+    holdout_model = make_models()[best_name]
+
+    holdout_model.fit(
+        X_development,
+        y_development
     )
 
-    # Финальное обучение на всей доступной истории
+    # Перевіряємо модель на останніх 20%.
+    holdout_predictions = holdout_model.predict(X_holdout)
+
+    # Порівнюємо з простим базовим методом.
+    holdout_baseline_predictions = X_holdout["rate"].values
+
+    holdout_mae = mean_absolute_error(
+        y_holdout,
+        holdout_predictions
+    )
+
+    holdout_baseline_mae = mean_absolute_error(
+        y_holdout,
+        holdout_baseline_predictions
+    )
+
+    # Зберігаємо результати фінальної перевірки.
+    holdout_records = []
+
+for i in range(len(X_holdout)):
+        holdout_records.append({
+            "date": data["target_date"].iloc[development_end + i],
+            "actual": float(y_holdout.iloc[i]),
+            "predicted": float(holdout_predictions[i]),
+            "baseline": float(holdout_baseline_predictions[i])
+        })
+
+    # Тепер навчаємо окрему фінальну модель
+    # на всій доступній історії для експериментального прогнозу.
     best_model = make_models()[best_name]
     best_model.fit(X, y)
 
@@ -298,6 +344,9 @@ def analyze_currency(df):
         "latest": latest,
         "fold_results": fold_results,
         "prediction_records": prediction_records
+        "holdout_mae": float(holdout_mae),
+        "holdout_baseline_mae": float(holdout_baseline_mae),
+        "holdout_records": holdout_records
     }
 
 
@@ -386,7 +435,71 @@ try:
         fig,
         use_container_width=True
     )
+    st.subheader("Незалежна фінальна перевірка")
 
+    col1, col2 = st.columns(2)
+
+with col1:
+    st.metric(
+        "MAE обраної моделі",
+        f"{result['holdout_mae']:.4f} UAH"
+    )
+
+with col2:
+    st.metric(
+        "MAE базового методу",
+        f"{result['holdout_baseline_mae']:.4f} UAH"
+    )
+
+if result["holdout_mae"] < result["holdout_baseline_mae"]:
+    st.success(
+        "На фінальному тестовому періоді "
+        "обрана модель мала меншу середню абсолютну помилку."
+    )
+else:
+    st.warning(
+        "На фінальному тестовому періоді "
+        "базовий метод показав не більшу помилку. "
+        "Складніша модель поки не продемонструвала переваги."
+    )
+
+    holdout_df = pd.DataFrame(result["holdout_records"])
+
+    holdout_chart = go.Figure()
+
+    holdout_chart.add_trace(go.Scatter(
+        x=holdout_df["date"],
+        y=holdout_df["actual"],
+        mode="lines",
+        name="Фактичні значення"
+))
+
+    holdout_chart.add_trace(go.Scatter(
+        x=holdout_df["date"],
+        y=holdout_df["predicted"],
+        mode="lines",
+        name="Обрана модель"
+))
+
+    holdout_chart.add_trace(go.Scatter(
+        x=holdout_df["date"],
+        y=holdout_df["baseline"],
+        mode="lines",
+        name="Базовий метод"
+))
+
+    holdout_chart.update_layout(
+        title="Результати на незалежному тестовому періоді",
+        xaxis_title="Дата",
+        yaxis_title="Офіційний курс, UAH",
+        template="plotly_dark",
+        hovermode="x unified"
+)
+
+    st.plotly_chart(
+        holdout_chart,
+        use_container_width=True
+)
     # Сравнение моделей
     st.subheader("Сравнение моделей")
 

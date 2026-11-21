@@ -202,7 +202,7 @@ def analyze_currency(df):
 
     # Последовательная проверка
     for fold_number, (train_idx, test_idx) in enumerate(
-        splitter.split(X_development)
+        splitter.split(X_development),
         start=1
     ):
         X_train = X.iloc[train_idx]

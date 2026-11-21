@@ -241,11 +241,11 @@ def analyze_currency(df):
             predictions = model.predict(X_test)
 
             for i in range(len(test_idx)):
-            prediction_records[name].append({
-               "date": data["target_date"].iloc[test_idx[i]],
-               "actual": float(y_test.iloc[i]),
-               "predicted": float(predictions[i]),
-               "fold": fold_number
+                prediction_records[name].append({
+                "date": data["target_date"].iloc[test_idx[i]],
+                "actual": float(y_test.iloc[i]),
+                "predicted": float(predictions[i]),
+                "fold": fold_number
             })
 
             error = mean_absolute_error(

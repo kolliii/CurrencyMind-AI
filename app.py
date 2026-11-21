@@ -196,14 +196,7 @@ def analyze_currency(df):
     }
 
     baseline_errors = []
-    # Збереження результатів Baseline
-    for i in range(len(test_idx)):
-    prediction_records["Baseline"].append({
-        "date": data["target_date"].iloc[test_idx[i]],
-        "actual": float(y_test.iloc[i]),
-        "predicted": float(baseline_predictions[i]),
-        "fold": fold_number
-    })
+    
     fold_results = []
 
     # Послідовна перевірка
@@ -227,6 +220,14 @@ def analyze_currency(df):
         )
 
         baseline_errors.append(baseline_error)
+        # Збереження результатів Baseline
+        for i in range(len(test_idx)):
+            prediction_records["Baseline"].append({
+            "date": data["target_date"].iloc[test_idx[i]],
+            "actual": float(y_test.iloc[i]),
+            "predicted": float(baseline_predictions[i]),
+            "fold": fold_number
+        })
 
         fold_record = {
             "Перевірка": fold_number,
@@ -308,7 +309,8 @@ def analyze_currency(df):
         ),
         "results": results,
         "latest": latest,
-        "fold_results": fold_results
+        "fold_results": fold_results,
+        "prediction_records": prediction_records
     }
     
     
@@ -419,6 +421,78 @@ try:
         use_container_width=True
     )
     
+    # Графік фактичних і прогнозованих значень
+    st.subheader("Фактичні значення та прогнози моделей")
+
+        actual_df = pd.DataFrame(
+        result["prediction_records"]["Baseline"]
+        ).sort_values("date")
+
+        fig_predictions = go.Figure()
+
+    # Фактичний курс
+        fig_predictions.add_trace(go.Scatter(
+        x=actual_df["date"],
+        y=actual_df["actual"],
+        mode="lines",
+        name="Фактичне значення"
+    ))
+
+    # Прогнози кожної моделі
+    for model_name in ["Baseline", "Ridge", "Random Forest"]:
+
+        model_df = pd.DataFrame(
+        result["prediction_records"][model_name]
+        ).sort_values("date")
+
+        fig_predictions.add_trace(go.Scatter(
+        x=model_df["date"],
+        y=model_df["predicted"],
+        mode="lines",
+        name=f"Прогноз {model_name}"
+   ))
+
+    fig_predictions.update_layout(
+    xaxis_title="Дата",
+    yaxis_title="Офіційний курс, UAH",
+    template="plotly_dark",
+    hovermode="x unified"
+  )
+
+  st.plotly_chart(
+     fig_predictions,
+     use_container_width=True
+  )
+
+  
+# Графік помилок на кожній перевірці
+    st.subheader("Помилки моделей за перевірками")
+
+fold_chart = go.Figure()
+
+for column in [
+    "Baseline MAE",
+    "Ridge",
+    "Random Forest"
+]:
+    fold_chart.add_trace(go.Bar(
+        x=fold_df["Перевірка"],
+        y=fold_df[column],
+        name=column
+    ))
+
+fold_chart.update_layout(
+    xaxis_title="Номер перевірки",
+    yaxis_title="MAE, UAH",
+    barmode="group",
+    template="plotly_dark"
+)
+
+st.plotly_chart(
+    fold_chart,
+    use_container_width=True
+)
+
     st.subheader("Результати Walk-Forward Validation")
 
     fold_df = pd.DataFrame(result["fold_results"])
